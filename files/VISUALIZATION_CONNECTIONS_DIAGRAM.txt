@@ -1,0 +1,351 @@
+╔════════════════════════════════════════════════════════════════════╗
+║                                                                    ║
+║           DATASET CONNECTION & VISUALIZATION MAP                   ║
+║                                                                    ║
+╚════════════════════════════════════════════════════════════════════╝
+
+
+                        DATA CONNECTION DIAGRAM
+═══════════════════════════════════════════════════════════════════════
+
+
+                    ┌─────────────────────────┐
+                    │   BTS DELAY DATA        │
+                    │   (Core Dataset)        │
+                    │                         │
+                    │  • Origin (airport)     │
+                    │  • Carrier (airline)    │
+                    │  • FlightDate (date)    │
+                    │  • DepDelay             │
+                    │  • CarrierDelay         │
+                    │  • WeatherDelay         │
+                    └───────────┬─────────────┘
+                                │
+                 ┌──────────────┼──────────────┐
+                 │              │              │
+                 ▼              ▼              ▼
+    ┌──────────────────┐  ┌─────────────┐  ┌──────────────────┐
+    │   AIRPORTS       │  │   WEATHER   │  │    REVIEWS       │
+    │   (Geographic)   │  │   (Hourly)  │  │  (Sentiment)     │
+    │                  │  │             │  │                  │
+    │ • iata_code ────────→ station    │  │ • airline_name   │
+    │ • latitude_deg   │  │ • valid     │  │ • date_flown     │
+    │ • longitude_deg  │  │ • tmpf      │  │ • overall_rating │
+    │ • elevation_ft   │  │ • vsby      │  │ • content (text) │
+    └──────────────────┘  │ • p01i      │  └──────────────────┘
+                          │ • sknt      │            ▲
+                          └─────────────┘            │
+                                                     │
+                                        ┌────────────┘
+                                        │ Requires Mapping:
+                                        │ "american-airlines" → "AA"
+                                        │ "delta-air-lines"   → "DL"
+
+
+═══════════════════════════════════════════════════════════════════════
+                        JOIN RELATIONSHIPS
+═══════════════════════════════════════════════════════════════════════
+
+JOIN 1: BTS + AIRPORTS (Geography)
+───────────────────────────────────────────────────────────────────────
+  BTS.Origin = AIRPORTS.iata_code
+  
+  RESULT: Delays + Location + Elevation
+  
+  USE FOR:
+    ✓ Geographic map of delays
+    ✓ Elevation analysis
+    ✓ Regional patterns
+
+
+JOIN 2: BTS + WEATHER (Correlation)
+───────────────────────────────────────────────────────────────────────
+  BTS.Origin = WEATHER.station
+  AND DATE(BTS.FlightDate) = DATE(WEATHER.valid)
+  
+  RESULT: Delays + Weather Conditions
+  
+  USE FOR:
+    ✓ Visibility vs delay scatter
+    ✓ Weather correlation analysis
+    ✓ Threshold identification
+
+
+JOIN 3: BTS + REVIEWS (Sentiment)
+───────────────────────────────────────────────────────────────────────
+  BTS.Carrier = REVIEWS.carrier_code
+  AND YEAR-MONTH match
+  
+  RESULT: Delays + Customer Opinion
+  
+  USE FOR:
+    ✓ Rating vs delay scatter
+    ✓ Gap analysis
+    ✓ Text mining for complaints
+
+
+═══════════════════════════════════════════════════════════════════════
+              VISUALIZATION MATRIX: WHAT CAN YOU CREATE?
+═══════════════════════════════════════════════════════════════════════
+
+┌────────────────┬──────────────┬──────────────┬──────────────────────┐
+│ CHART TYPE     │ DATA NEEDED  │ X-AXIS       │ Y-AXIS / COLOR       │
+├────────────────┼──────────────┼──────────────┼──────────────────────┤
+│ Geographic Map │ BTS+AIRPORTS │ longitude    │ latitude             │
+│                │              │              │ Size: avg delay      │
+│                │              │              │ Color: severity      │
+├────────────────┼──────────────┼──────────────┼──────────────────────┤
+│ Stacked Bar    │ BTS          │ Airport      │ Delay amount         │
+│                │              │              │ Stacks: cause types  │
+├────────────────┼──────────────┼──────────────┼──────────────────────┤
+│ Scatter Plot   │ BTS+WEATHER  │ Visibility   │ Weather Delay        │
+│                │              │              │ Color: precipitation │
+├────────────────┼──────────────┼──────────────┼──────────────────────┤
+│ Time Series    │ BTS          │ Date         │ Avg Delay            │
+│                │              │              │ Multiple lines       │
+├────────────────┼──────────────┼──────────────┼──────────────────────┤
+│ Sentiment Gap  │ BTS+REVIEWS  │ Avg Delay    │ Avg Rating           │
+│                │              │              │ Size: # reviews      │
+├────────────────┼──────────────┼──────────────┼──────────────────────┤
+│ Heatmap        │ BTS          │ Day of Week  │ Hour of Day          │
+│                │              │              │ Color: delay amount  │
+├────────────────┼──────────────┼──────────────┼──────────────────────┤
+│ Box Plot       │ BTS+AIRPORTS │ Elevation    │ Delay distribution   │
+│                │              │ (grouped)    │                      │
+└────────────────┴──────────────┴──────────────┴──────────────────────┘
+
+
+═══════════════════════════════════════════════════════════════════════
+                  RECOMMENDED 4-CHART DASHBOARD
+═══════════════════════════════════════════════════════════════════════
+
+┌─────────────────────────────────────────────────────────────────────┐
+│ 📊 AIRLINE PERFORMANCE & DELAY DASHBOARD                            │
+│ Date Range: 2023-2024  |  Filter: [All Airports ▼] [All Airlines ▼]│
+├───────────────────────────────────┬─────────────────────────────────┤
+│                                   │                                 │
+│  CHART 1: GEOGRAPHIC MAP          │  CHART 2: DELAY BREAKDOWN       │
+│  ════════════════════════          │  ═══════════════════════        │
+│  Data: BTS + AIRPORTS             │  Data: BTS                      │
+│                                   │                                 │
+│    🗺️  [US Map]                   │  ┌─┐ ATL ████████████          │
+│       • ATL                       │  ├─┤ ORD █████████████          │
+│       ⚫ ORD                       │  ├─┤ DEN ██████████             │
+│       ⚫ DEN                       │  ├─┤ LAX ████████               │
+│       • LAX                       │  ├─┤ JFK ███████                │
+│                                   │  ├─┤ DFW ████████               │
+│  Size = Avg Delay                 │  └─┘                            │
+│  Color = Severity                 │                                 │
+│                                   │  Legend: █ Carrier █ Weather    │
+│  Hover: Show stats                │          █ NAS     █ Late A/C   │
+│  Click: Filter other charts       │                                 │
+│                                   │                                 │
+├───────────────────────────────────┼─────────────────────────────────┤
+│                                   │                                 │
+│  CHART 3: WEATHER CORRELATION     │  CHART 4: SENTIMENT vs REALITY  │
+│  ═══════════════════════════       │  ═══════════════════════════    │
+│  Data: BTS + WEATHER              │  Data: BTS + REVIEWS            │
+│                                   │                                 │
+│   Delay                           │   Rating                        │
+│   (min)    •                      │   (1-10)                        │
+│   150│     •   •                  │      10│     AA  •              │
+│      │    ••  •••                 │        │           •  DL        │
+│   100│   •••••••••                │       7│      •                 │
+│      │  ••••••••••                │        │    • UA                │
+│    50│ •••••••••••                │       5│  •                     │
+│      │••••••••••••                │        │•  WN                   │
+│      └──────────────              │        └────────────            │
+│       1   3   5   10              │         10   20   30            │
+│       Visibility (mi)             │         Avg Delay (min)         │
+│                                   │                                 │
+│  Shows: Delays spike below 3mi    │  Shows: Gap between perception  │
+│  Line: Threshold indicator        │         and reality by airline  │
+│                                   │                                 │
+└───────────────────────────────────┴─────────────────────────────────┘
+│ 💡 KEY INSIGHTS:                                                     │
+│   • ORD has highest weather delays (Chicago winters)                │
+│   • Delays increase 300% when visibility < 3 miles                  │
+│   • Airline AA has great reviews but above-average delays           │
+└──────────────────────────────────────────────────────────────────────┘
+
+
+═══════════════════════════════════════════════════════════════════════
+                    INTERACTION FLOW DIAGRAM
+═══════════════════════════════════════════════════════════════════════
+
+USER ACTION                    SYSTEM RESPONSE
+──────────────────────────────────────────────────────────────────────
+
+1. User clicks airport         →  All charts filter to that airport
+   on map (e.g., "ORD")           • Bar chart shows only ORD
+                                  • Scatter updates with ORD data
+                                  • Sentiment shows airlines at ORD
+
+2. User hovers over bar        →  Tooltip appears across all charts
+   in delay breakdown             • Shows exact values
+                                  • Highlights same airport on map
+
+3. User brushes date range     →  All charts update to date range
+   on time series                 • Map shows delays in that period
+                                  • Weather correlation filtered
+
+4. User selects airline        →  Focus on that airline
+   from dropdown                  • Show routes for that airline
+                                  • Filter reviews to that airline
+                                  • Compare to industry average
+
+
+═══════════════════════════════════════════════════════════════════════
+                  SPECIFIC VISUALIZATION EXAMPLES
+═══════════════════════════════════════════════════════════════════════
+
+EXAMPLE 1: Weather Threshold Analysis
+───────────────────────────────────────────────────────────────────────
+
+QUESTION: At what visibility do delays spike?
+
+DATA:
+  • weather.vsby (x-axis): 0-10 miles
+  • bts.WeatherDelay (y-axis): 0-150 minutes
+  • weather.p01i (color): precipitation amount
+
+VISUALIZATION:
+  Scatter plot with:
+  • Each point = one flight
+  • Vertical line at vsby = 3 miles (threshold)
+  • Color gradient: blue (dry) to red (wet)
+  • Trend line showing correlation
+
+CODE SNIPPET:
+  const x = d3.scaleLinear()
+    .domain([0, 10])
+    .range([0, width]);
+  
+  const y = d3.scaleLinear()
+    .domain([0, d3.max(data, d => d.WeatherDelay)])
+    .range([height, 0]);
+  
+  svg.selectAll('circle')
+    .data(data)
+    .join('circle')
+    .attr('cx', d => x(d.vsby))
+    .attr('cy', d => y(d.WeatherDelay))
+    .attr('r', 4)
+    .attr('fill', d => colorScale(d.p01i));
+
+
+EXAMPLE 2: Airport Ranking with Delay Breakdown
+───────────────────────────────────────────────────────────────────────
+
+QUESTION: Which airports have worst delays and why?
+
+DATA:
+  • bts.Origin (x-axis): Top 10 airports
+  • bts delays (y-axis, stacked):
+    - CarrierDelay
+    - WeatherDelay
+    - NASDelay
+    - SecurityDelay
+    - LateAircraftDelay
+
+VISUALIZATION:
+  Stacked bar chart with:
+  • Different color for each delay type
+  • Legend showing what each color means
+  • Tooltip with exact minutes
+  • Click to filter other charts
+
+INSIGHT:
+  • ORD: High weather delays (blue stack largest)
+  • ATL: High NAS delays (orange stack - air traffic)
+  • LAX: High carrier delays (red stack - airline issues)
+
+
+EXAMPLE 3: Sentiment-Reality Gap Analysis
+───────────────────────────────────────────────────────────────────────
+
+QUESTION: Do customer reviews match actual performance?
+
+DATA:
+  • Aggregate by airline:
+    - X: Average delay (from BTS)
+    - Y: Average rating (from reviews)
+    - Size: Number of reviews
+    - Label: Carrier code
+
+VISUALIZATION:
+  Scatter plot with quadrants:
+  
+  Good Rating     │  Good Rating
+  Bad Performance │  Good Performance
+  ────────────────┼────────────────
+  Bad Rating      │  Bad Rating
+  Bad Performance │  Good Performance
+
+INSIGHT:
+  • Carriers in top-left quadrant = Overrated
+    (Good reviews but high delays)
+  • Carriers in bottom-right = Underrated
+    (Bad reviews but low delays)
+
+
+EXAMPLE 4: Elevation Effect on Delays
+───────────────────────────────────────────────────────────────────────
+
+QUESTION: Do high-altitude airports have more delays?
+
+DATA:
+  • airports.elevation_ft (grouped):
+    - Low: 0-1,000 ft
+    - Medium: 1,000-3,000 ft
+    - High: 3,000-5,000 ft
+    - Very High: >5,000 ft
+  • bts.WeatherDelay (distribution)
+
+VISUALIZATION:
+  Box plot showing:
+  • Median line
+  • Quartile boxes
+  • Whiskers for range
+  • Outliers as dots
+
+FINDING:
+  Denver (DEN, 5,430 ft):
+  • 40% more weather delays
+  • More affected by snow/ice
+  • Thinner air affects aircraft
+
+
+═══════════════════════════════════════════════════════════════════════
+                    KEY COLUMN CHEAT SHEET
+═══════════════════════════════════════════════════════════════════════
+
+FOR MAPPING:
+  airports.latitude_deg      → Y coordinate
+  airports.longitude_deg     → X coordinate
+  bts.Origin                 → Join key
+
+FOR DELAY ANALYSIS:
+  bts.DepDelay              → Total delay (main metric)
+  bts.CarrierDelay          → Airline's fault
+  bts.WeatherDelay          → Weather's fault
+  bts.NASDelay              → Air traffic control
+
+FOR WEATHER CORRELATION:
+  weather.vsby              → Visibility (< 3 = bad)
+  weather.p01i              → Rain amount
+  weather.sknt              → Wind speed (> 20 = high)
+  weather.tmpf              → Temperature
+
+FOR SENTIMENT:
+  reviews.overall_rating    → 1-10 score
+  reviews.content           → Search for "delay"
+  reviews.recommended       → 1 or 0
+
+FOR FILTERING:
+  bts.Origin                → Airport filter
+  bts.Carrier               → Airline filter
+  bts.FlightDate            → Date range
+  bts.DayOfWeek             → Day pattern analysis
+
+═══════════════════════════════════════════════════════════════════════

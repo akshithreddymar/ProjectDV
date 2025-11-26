@@ -1,0 +1,307 @@
+╔════════════════════════════════════════════════════════════════════╗
+║                                                                    ║
+║                  QUICK REFERENCE CHEAT SHEET                       ║
+║                 Columns, Joins & Visualizations                    ║
+║                                                                    ║
+╚════════════════════════════════════════════════════════════════════╝
+
+
+═══════════════════════════════════════════════════════════════════════
+🔑 KEY COLUMNS FOR JOINING
+═══════════════════════════════════════════════════════════════════════
+
+BTS Dataset:
+  • Origin          → Join with airports.iata_code & weather.station
+  • Carrier         → Join with reviews.carrier_code (after mapping)
+  • FlightDate      → Join with weather.valid (date only)
+
+Airport Dataset:
+  • iata_code       → Join with BTS.Origin
+
+Weather Dataset:
+  • station         → Join with BTS.Origin
+  • valid           → Join with BTS.FlightDate (date part)
+
+Reviews Dataset:
+  • airline_name    → Map to carrier codes first, then join
+  • date_flown      → Match year-month with BTS.FlightDate
+
+
+═══════════════════════════════════════════════════════════════════════
+📊 TOP 10 MOST IMPORTANT COLUMNS
+═══════════════════════════════════════════════════════════════════════
+
+1.  bts.DepDelay          → Main metric (total delay)
+2.  bts.WeatherDelay      → Weather-caused delay
+3.  bts.Origin            → Airport code (join key)
+4.  weather.vsby          → Visibility (< 3 = problems)
+5.  airports.latitude_deg → For mapping
+6.  airports.longitude_deg→ For mapping
+7.  airports.elevation_ft → High altitude analysis
+8.  reviews.overall_rating→ Customer satisfaction
+9.  reviews.content       → Text for sentiment analysis
+10. bts.Carrier           → Airline code
+
+
+═══════════════════════════════════════════════════════════════════════
+🎯 4 ESSENTIAL VISUALIZATIONS
+═══════════════════════════════════════════════════════════════════════
+
+VIZ 1: GEOGRAPHIC MAP
+───────────────────────────────────────────────────────────────────────
+Data:     BTS + Airports
+Columns:  origin_lat, origin_lon, DepDelay
+Chart:    Map with circles
+Size:     By average delay
+Color:    Severity (green/yellow/red)
+Code:     d3.geoAlbersUsa() + circles
+
+
+VIZ 2: STACKED BAR CHART
+───────────────────────────────────────────────────────────────────────
+Data:     BTS only
+Columns:  Origin, CarrierDelay, WeatherDelay, NASDelay
+Chart:    Stacked bars
+X-axis:   Top 10 airports
+Y-axis:   Total delay (minutes)
+Stacks:   Different delay causes
+Code:     d3.stack() + bars
+
+
+VIZ 3: SCATTER PLOT (Weather Correlation)
+───────────────────────────────────────────────────────────────────────
+Data:     BTS + Weather
+Columns:  vsby (x), WeatherDelay (y), p01i (color)
+Chart:    Scatter with threshold line
+X-axis:   Visibility (miles)
+Y-axis:   Weather delay (minutes)
+Line:     Threshold at vsby = 3 miles
+Code:     d3.scaleLinear() + circles
+
+
+VIZ 4: SENTIMENT GAP SCATTER
+───────────────────────────────────────────────────────────────────────
+Data:     BTS + Reviews (aggregated by carrier)
+Columns:  avg(DepDelay), avg(overall_rating), Carrier
+Chart:    Scatter with quadrants
+X-axis:   Average delay
+Y-axis:   Average rating
+Size:     Number of reviews
+Labels:   Carrier codes
+Code:     d3.scaleLinear() + circles + labels
+
+
+═══════════════════════════════════════════════════════════════════════
+🔗 JOIN CHEAT CODES (Pandas)
+═══════════════════════════════════════════════════════════════════════
+
+# Join 1: BTS + Airports
+merged = bts.merge(
+    airports[['iata_code', 'latitude_deg', 'longitude_deg', 'elevation_ft']],
+    left_on='Origin',
+    right_on='iata_code',
+    how='left'
+)
+
+# Join 2: BTS + Weather (daily)
+weather_daily = weather.groupby(['station', 'date']).agg({
+    'vsby': 'mean', 'tmpf': 'mean', 'p01i': 'sum'
+}).reset_index()
+
+merged = merged.merge(
+    weather_daily,
+    left_on=['Origin', 'FlightDate'],
+    right_on=['station', 'date'],
+    how='left'
+)
+
+# Join 3: BTS + Reviews (monthly aggregation)
+reviews['carrier_code'] = reviews['airline_name'].map(mapping)
+reviews['year_month'] = pd.to_datetime(reviews['date_flown']).dt.to_period('M')
+
+review_agg = reviews.groupby(['carrier_code', 'year_month']).agg({
+    'overall_rating': 'mean'
+}).reset_index()
+
+merged['year_month'] = merged['FlightDate'].dt.to_period('M')
+merged = merged.merge(
+    review_agg,
+    left_on=['Carrier', 'year_month'],
+    right_on=['carrier_code', 'year_month'],
+    how='left'
+)
+
+
+═══════════════════════════════════════════════════════════════════════
+💡 KEY INSIGHTS TO FIND
+═══════════════════════════════════════════════════════════════════════
+
+INSIGHT 1: Visibility Threshold
+  Query:  Compare delays when vsby < 3 vs vsby >= 3
+  Finding: "Delays increase 300% when visibility drops below 3 miles"
+
+INSIGHT 2: Elevation Effect  
+  Query:  Group airports by elevation, compare delays
+  Finding: "High-altitude airports (>5000 ft) have 40% more weather delays"
+
+INSIGHT 3: Sentiment Gap
+  Query:  Plot rating vs delay, find outliers
+  Finding: "Airline X has 8/10 rating but 2× average delays"
+
+INSIGHT 4: Day Pattern
+  Query:  Group by DayOfWeek, average delays
+  Finding: "Monday mornings have highest delays (weekend cascade)"
+
+INSIGHT 5: Delay Cause by Airport
+  Query:  Stacked bar of delay types per airport
+  Finding: "ORD=weather, ATL=NAS, LAX=carrier"
+
+
+═══════════════════════════════════════════════════════════════════════
+📏 IMPORTANT THRESHOLDS
+═══════════════════════════════════════════════════════════════════════
+
+Weather:
+  • vsby < 3 miles     = Poor visibility, likely delays
+  • vsby < 1 mile      = Very poor, definite delays
+  • sknt > 20 knots    = Strong winds, possible delays
+  • p01i > 0.5 inches  = Heavy rain, likely delays
+  • tmpf < 32°F        = Freezing, de-icing delays
+
+Elevation:
+  • < 1,000 ft         = Sea level airports
+  • 1,000-3,000 ft     = Low elevation
+  • 3,000-5,000 ft     = Medium elevation
+  • > 5,000 ft         = High elevation (DEN=5,430 ft)
+
+Delays:
+  • < 15 min           = Minor delay
+  • 15-60 min          = Moderate delay
+  • 60-120 min         = Major delay
+  • > 120 min          = Severe delay
+
+Ratings:
+  • 8-10 / 10          = Excellent
+  • 6-7.9 / 10         = Good
+  • 4-5.9 / 10         = Fair
+  • < 4 / 10           = Poor
+
+
+═══════════════════════════════════════════════════════════════════════
+🎨 COLOR SCHEMES FOR DASHBOARD
+═══════════════════════════════════════════════════════════════════════
+
+Delay Severity (Map):
+  Green:  #27ae60  (< 15 min)
+  Yellow: #f39c12  (15-60 min)
+  Orange: #e67e22  (60-120 min)
+  Red:    #e74c3c  (> 120 min)
+
+Delay Types (Stacked Bar):
+  Carrier:       #e74c3c  (red)
+  Weather:       #3498db  (blue)
+  NAS:           #f39c12  (orange)
+  Security:      #9b59b6  (purple)
+  Late Aircraft: #1abc9c  (teal)
+
+Weather Conditions:
+  Clear:         #3498db  (blue)
+  Cloudy:        #95a5a6  (gray)
+  Rain:          #2980b9  (dark blue)
+  Storm:         #8e44ad  (purple)
+
+Sentiment:
+  Positive:      #27ae60  (green)
+  Neutral:       #f39c12  (orange)
+  Negative:      #e74c3c  (red)
+
+
+═══════════════════════════════════════════════════════════════════════
+🔍 COLUMN VALUE EXAMPLES
+═══════════════════════════════════════════════════════════════════════
+
+BTS Examples:
+  Origin:         "ORD", "ATL", "DEN"
+  Carrier:        "AA", "DL", "UA", "WN"
+  DepDelay:       45.2 (minutes)
+  WeatherDelay:   15.0 (minutes)
+  FlightDate:     "2023-06-15"
+
+Airport Examples:
+  iata_code:      "ORD"
+  name:           "Chicago O'Hare International Airport"
+  latitude_deg:   41.9786
+  longitude_deg:  -87.9048
+  elevation_ft:   672
+
+Weather Examples:
+  station:        "ORD"
+  valid:          "2023-06-15 14:00:00"
+  tmpf:           75.0 (Fahrenheit)
+  vsby:           10.0 (miles)
+  p01i:           0.05 (inches)
+  sknt:           12.0 (knots)
+
+Review Examples:
+  airline_name:   "american-airlines"
+  overall_rating: 7 (out of 10)
+  content:        "Flight was delayed 2 hours..."
+  recommended:    1 (yes) or 0 (no)
+
+
+═══════════════════════════════════════════════════════════════════════
+🚀 QUICK START WORKFLOW
+═══════════════════════════════════════════════════════════════════════
+
+1. Load data:          python read_datasets.py
+2. Merge data:         python merge_datasets.py
+3. Check output:       data/processed/viz_*.csv files
+4. Load in dashboard:  d3.csv('data/processed/viz_airport_summary.csv')
+5. Create viz:         Use code from sample_visualizations.js
+6. Add interactivity:  Implement cross-chart filtering
+
+
+═══════════════════════════════════════════════════════════════════════
+📁 OUTPUT FILES FOR DASHBOARD
+═══════════════════════════════════════════════════════════════════════
+
+viz_airport_summary.csv
+  Use for: Map + Bar chart
+  Columns: Origin, lat, lon, delays by type
+
+viz_weather_delay.csv
+  Use for: Scatter plot (weather correlation)
+  Columns: vsby, tmpf, p01i, WeatherDelay
+
+viz_carrier_summary.csv
+  Use for: Sentiment gap analysis
+  Columns: Carrier, DepDelay, avg_rating
+
+viz_daily_summary.csv
+  Use for: Time series
+  Columns: FlightDate, delays, weather conditions
+
+
+═══════════════════════════════════════════════════════════════════════
+✅ FINAL CHECKLIST
+═══════════════════════════════════════════════════════════════════════
+
+Data Preparation:
+  □ Downloaded all 4 datasets
+  □ Ran merge_datasets.py
+  □ Created viz_*.csv files
+  □ Verified file sizes and row counts
+
+Dashboard Requirements:
+  □ 3-4 different chart types
+  □ Interactive features (hover, click, brush)
+  □ Cross-chart filtering
+  □ Clear data story with text explanations
+
+Documentation:
+  □ Data sources cited
+  □ Column descriptions
+  □ Join methodology explained
+  □ Key insights documented
+
+═══════════════════════════════════════════════════════════════════════
